@@ -57,8 +57,6 @@ Generates a 30-second screening report containing:
 
 ---
 
-## 📸 Screenshots
-(Add images here later)
 
 ---
 
