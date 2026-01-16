@@ -24,6 +24,8 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import org.tensorflow.lite.Interpreter
 import java.io.File
 import java.io.FileInputStream
@@ -66,6 +68,8 @@ class MainActivity : AppCompatActivity() {
     // Running flags
     private var running = false
     private var flashOn = false
+    private var authenticated = false
+    private var pendingTorchOn = false
 
     // Circular buffer for samples
     private val MAX_BUFFER = 2400 // large buffer (~60-80s at 30-40Hz)
@@ -122,6 +126,8 @@ class MainActivity : AppCompatActivity() {
         btnFlash.setOnClickListener { toggleFlash() }
         btnReset.setOnClickListener { resetAll() }
 
+        waveformView.setColor(android.graphics.Color.GREEN)
+
         // attach optional parameter TextViews (IBI, HRV, Stress); create if missing
         safeAttachExtraParameterViews()
 
@@ -141,6 +147,8 @@ class MainActivity : AppCompatActivity() {
             Log.w(TAG, "Could not load tflite: ${e.localizedMessage}")
             tflite = null
         }
+
+        initBiometricAuth()
     }
 
     // If layout lacks extra parameter TextViews, create them and attach below waveform
@@ -191,9 +199,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun startCapture() {
         if (running) return
+        if (!authenticated) {
+            tvStatus.text = "Authenticate to start"
+            return
+        }
         running = true
         btnStart.isEnabled = false
         tvStatus.text = "Starting camera..."
+        pendingTorchOn = true
         startCamera()
     }
 
@@ -279,6 +292,18 @@ class MainActivity : AppCompatActivity() {
                 val camera = cameraProvider?.bindToLifecycle(this, selector, preview, imageAnalysis)
                 cameraControl = camera?.cameraControl
                 tvStatus.text = "Camera running"
+                if (pendingTorchOn) {
+                    try {
+                        flashOn = true
+                        cameraControl?.enableTorch(true)
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            val method = cameraControl?.javaClass?.methods?.firstOrNull { it.name == "setTorchStrengthLevel" }
+                            method?.invoke(cameraControl, 1)
+                        }
+                        tvStatus.text = "Flash: ON"
+                    } catch (_: Exception) {}
+                    pendingTorchOn = false
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Bind failed", e)
                 tvStatus.text = "Camera bind failed"
@@ -340,14 +365,13 @@ class MainActivity : AppCompatActivity() {
         val pulsatility = computePulsatilityScore(combined, fs)
         val fingerDetected = compositeFingerDetection(windowR, windowG, sqiCombined, pulsatility, redGlow)
 
-        // Update waveform + SQI on UI
         runOnUiThread {
             waveformView.updateData(combined)
             tvSQI.text = "SQI: ${"%.2f".format(sqiCombined)} ${if (fingerDetected) "(finger)" else "(no finger)"}"
         }
 
         // Start reporting accumulation when fingerDetected true, SQI ok, and flash on
-        if (fingerDetected && sqiCombined >= 0.25f && flashOn) {
+        if (fingerDetected && sqiCombined >= 0.20f && flashOn) {
             if (!reporting) {
                 reporting = true
                 reportStartTimeMs = System.currentTimeMillis()
@@ -364,7 +388,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // If finger present & flash on & decent SQI, compute HR/HRV/etc.
-        if (fingerDetected && sqiCombined >= 0.28f && flashOn) {
+        if (fingerDetected && sqiCombined >= 0.20f && flashOn) {
             executor.execute {
                 val hrSpec = estimateHRFromSpectrum(combined, fs)
                 val peaks = detectPeaks(combined, fs)
@@ -480,6 +504,58 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    private fun initBiometricAuth() {
+        val bm = BiometricManager.from(this)
+        val can = bm.canAuthenticate(
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.BIOMETRIC_WEAK or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        )
+        when (can) {
+            BiometricManager.BIOMETRIC_SUCCESS -> {}
+            else -> {
+                tvStatus.text = "Biometrics unavailable"
+                return
+            }
+        }
+        btnStart.isEnabled = false
+        btnFlash.isEnabled = false
+        btnReset.isEnabled = false
+        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                authenticated = true
+                btnStart.isEnabled = true
+                btnFlash.isEnabled = true
+                btnReset.isEnabled = true
+                tvStatus.text = "Authenticated"
+            }
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Authentication required")
+                    .setMessage(errString)
+                    .setPositiveButton("Retry") { _, _ -> initBiometricAuth() }
+                    .setNegativeButton("Exit") { _, _ -> finish() }
+                    .setCancelable(false)
+                    .show()
+            }
+            override fun onAuthenticationFailed() {
+                tvStatus.text = "Authentication failed"
+            }
+        })
+        val info = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock PPGCardioApp")
+            .setSubtitle("Biometric authentication")
+            .setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
+            .build()
+        prompt.authenticate(info)
+    }
+
+    
 
     // ===========================
     // === Reporting helpers =====
@@ -1086,27 +1162,16 @@ class MainActivity : AppCompatActivity() {
         val n = winR.size
         if (n < 20) return false
 
-        // 1) RED CHANNEL MUST BE DOMINANT
         val meanR = winR.average().toFloat()
-        val meanG = winG.average().toFloat()
-        val redRatio = meanR / (meanG + 1e-6f)
-
-        val redOk = redRatio > 2.0f   // require strong red dominance
-
-        // 2) RED VARIANCE SHOULD NOT BE ZERO (finger gives small pulse variation)
         val varR = winR.map { it - meanR }.map { it * it }.average().toFloat()
-        val varOk = varR > 0.3f && varR < 80f
-
-        // 3) SQI must be somewhat OK
-        val sqiOk = sqi > 0.15f
-
-        // 4) Pulsatility only needed AFTER steady signal
-        val pulseOk = pulsatility > 0.05f
+        val varOk = varR > 0.02f && varR < 200f
+        val sqiOk = sqi > 0.12f
+        val pulseOk = pulsatility > 0.02f
 
         // 5) Flash must be ON
         val flashOk = flashOn
 
-        return redOk && varOk && sqiOk && pulseOk && flashOk
+        return varOk && sqiOk && pulseOk && flashOk
     }
 
     // Peak detection (time-domain)

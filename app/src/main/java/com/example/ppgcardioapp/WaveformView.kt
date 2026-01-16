@@ -18,6 +18,11 @@ class WaveformView @JvmOverloads constructor(
         isAntiAlias = true
     }
 
+    fun setColor(color: Int) {
+        paint.color = color
+        postInvalidateOnAnimation()
+    }
+
     // internal buffer for waveform samples
     private var data: FloatArray = FloatArray(0)
 

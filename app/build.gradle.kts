@@ -73,4 +73,5 @@ dependencies {
 
     // 🔥 Recommended for model metadata support
     implementation("org.tensorflow:tensorflow-lite-metadata:0.4.3")
+    implementation("androidx.biometric:biometric:1.1.0")
 }

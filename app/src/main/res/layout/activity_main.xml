@@ -93,6 +93,8 @@
             android:layout_height="200dp"
             android:background="#000000"/>
 
+        
+
         <!-- HR + Risk -->
         <LinearLayout
             android:orientation="horizontal"
