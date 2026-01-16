@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:id="@+id/tvGuideTitle"
+            android:text="Finger Placement Guide"
+            android:textStyle="bold"
+            android:textSize="20sp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+        <ImageView
+            android:id="@+id/ivCamera"
+            android:src="@android:drawable/ic_menu_camera"
+            android:contentDescription="Camera"
+            android:layout_marginTop="12dp"
+            android:layout_gravity="center"
+            android:layout_width="72dp"
+            android:layout_height="72dp"/>
+
+        <TextView
+            android:id="@+id/tvGuidelines"
+            android:layout_marginTop="12dp"
+            android:textSize="16sp"
+            android:lineSpacingExtra="4dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="• Turn flash ON and cover CAMERA+FLASH with fingertip\n• Use the soft pad of finger (not fingernail)\n• Gentle pressure only; avoid squeezing\n• Keep phone stable; rest on a table if possible\n• Clean the lens; avoid ambient light leaks\n• Warm finger; cold fingers reduce signal"/>
+
+        <CheckBox
+            android:id="@+id/cbDontShow"
+            android:text="Don't show again"
+            android:layout_marginTop="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/btnGotIt"
+            android:text="Got it"
+            android:layout_marginTop="12dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+
+    </LinearLayout>
+
+</ScrollView>
+

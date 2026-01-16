@@ -13,8 +13,10 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,6 +29,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import android.content.Intent
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import org.tensorflow.lite.Interpreter
@@ -52,10 +55,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvScore: TextView
     private lateinit var tvSQI: TextView
     private lateinit var tvStatus: TextView
+    private lateinit var tvTimer: TextView
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
     private lateinit var btnFlash: Button
     private lateinit var btnReset: Button
+    private lateinit var btnOpenPdf: Button
 
     // Extra parameter TextViews (IBI, HRV, Stress)
     private var tvIBI: TextView? = null
@@ -75,6 +80,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingTorchOn = false
     private var torchEnabledAtMs: Long = 0L
     private var fingerConfidence: Float = 0f
+    private lateinit var baselineStore: BaselineStore
 
     // Circular buffer for samples
     private val MAX_BUFFER = 2400 // large buffer (~60-80s at 30-40Hz)
@@ -99,7 +105,7 @@ class MainActivity : AppCompatActivity() {
     // ---------- Reporting / accumulation ----------
     private var reportStartTimeMs: Long = 0L
     private var reporting = false
-    private val REPORT_SECONDS = 5L
+    private val REPORT_SECONDS = 30L
 
     // Lists to hold per-window metrics during the 30s reporting window
     private val hrList = ArrayList<Float>()
@@ -127,16 +133,19 @@ class MainActivity : AppCompatActivity() {
         tvScore = findViewById(R.id.tvScore)
         tvSQI = findViewById(R.id.tvSQI)
         tvStatus = findViewById(R.id.tvStatus)
+        tvTimer = findViewById(R.id.tvTimer)
 
         btnStart = findViewById(R.id.btnStart)
         btnStop = findViewById(R.id.btnStop)
         btnFlash = findViewById(R.id.btnFlash)
         btnReset = findViewById(R.id.btnReset)
+        btnOpenPdf = findViewById(R.id.btnOpenPdf)
 
         btnStart.setOnClickListener { startCapture() }
         btnStop.setOnClickListener { stopCapture() }
         btnFlash.setOnClickListener { toggleFlash() }
         btnReset.setOnClickListener { resetAll() }
+        btnOpenPdf.setOnClickListener { startActivity(Intent(this, PdfViewerActivity::class.java)) }
 
         waveformView.setColor(android.graphics.Color.GREEN)
 
@@ -161,6 +170,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         initBiometricAuth()
+        baselineStore = BaselineStore(this)
+        showGuidanceIfFirstRun()
     }
 
     // If layout lacks extra parameter TextViews, create them and attach below waveform
@@ -207,6 +218,24 @@ class MainActivity : AppCompatActivity() {
             container.addView(row)
             mainLayout.addView(container)
         }
+    }
+
+    private fun showGuidanceIfFirstRun() {
+        val prefs = getSharedPreferences("ppg_prefs", Context.MODE_PRIVATE)
+        val shown = prefs.getBoolean("guidance_shown", false)
+        if (shown) return
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_guidance, null)
+        val cb = view.findViewById<CheckBox>(R.id.cbDontShow)
+        val btn = view.findViewById<Button>(R.id.btnGotIt)
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .setCancelable(false)
+            .create()
+        btn.setOnClickListener {
+            if (cb.isChecked) prefs.edit().putBoolean("guidance_shown", true).apply()
+            dialog.dismiss()
+        }
+        dialog.show()
     }
 
     private fun startCapture() {
@@ -486,28 +515,14 @@ class MainActivity : AppCompatActivity() {
                     tvHRV?.text = "HRV (RMSSD): ${if (rmssd > 0f) String.format("%.3f", rmssd) else "--"}"
                     tvStress?.text = "StressIdx: ${String.format("%.2f", stressIdx)}"
 
-                    if (mlClass != null) {
-                        val label = when (mlClass) {
-                            0 -> "Normal"
-                            1 -> "Elevated"
-                            2 -> "High Risk"
-                            else -> "Unknown"
-                        }
-                        tvScore.text = "Risk: $label (${String.format("%.2f", score)})"
-                        tvStatus.text = when (mlClass) {
-                            2 -> "HIGH RISK - seek care"
-                            1 -> "MODERATE RISK"
-                            0 -> "LOW RISK"
-                            else -> "Result ready"
-                        }
-                    } else {
-                        tvScore.text = "Risk: ${"%.2f".format(score)}"
-                        tvStatus.text = when {
-                            score >= 0.8f -> "HIGH RISK - seek care"
-                            score >= 0.5f -> "MODERATE RISK"
-                            else -> "LOW RISK"
-                        }
-                    }
+                    val arrIdx = computeIrregularityIndex(rr)
+                    val baseline = baselineStore.load()
+                    val instability = computeInstabilityIndex(hr, rmssd, sqiCombined, baseline)
+                    val triage = classifyTriage(hr, rmssd, sqiCombined, arrIdx, computePulsatilityScore(combined, fs), instability)
+                    val label = when (triage) { 2 -> "Red"; 1 -> "Amber"; else -> "Green" }
+                    tvScore.text = "Risk: $label (${String.format("%.2f", instability)})"
+                    val elapsedSec = if (reporting) ((System.currentTimeMillis() - reportStartTimeMs)/1000L).toInt() else 0
+                    tvTimer.text = "Time: ${elapsedSec}/${REPORT_SECONDS}s"
                 }
             }
         } else {
@@ -717,6 +732,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Close", null)
+            .setNeutralButton("Call Now") { _, _ ->
+                try {
+                    val intent = Intent(Intent.ACTION_DIAL)
+                    startActivity(intent)
+                } catch (_: Exception) {}
+            }
 
         builder.show()
     }
@@ -1250,6 +1271,49 @@ class MainActivity : AppCompatActivity() {
             s += d * d
         }
         return sqrt(s / (rr.size - 1))
+    }
+
+    private fun computeIrregularityIndex(rr: FloatArray): Float {
+        if (rr.size < 3) return 0f
+        var m = 0f
+        for (v in rr) m += v
+        m /= rr.size
+        var s = 0f
+        for (v in rr) s += (v - m) * (v - m)
+        val std = sqrt(s / rr.size)
+        val cv = if (m > 0f) (std / m) else 0f
+        return cv.coerceIn(0f, 1f)
+    }
+
+    private fun computeInstabilityIndex(hr: Float, rmssd: Float, sqi: Float, baseline: Baseline?): Float {
+        val bHr = baseline?.hr ?: hr
+        val bRmssd = baseline?.rmssd ?: rmssd
+        val bSqi = baseline?.sqi ?: sqi
+        val dHr = kotlin.math.abs(hr - bHr) / kotlin.math.max(1f, bHr)
+        val dHrv = kotlin.math.max(0f, (bRmssd - rmssd)) / kotlin.math.max(0.02f, bRmssd)
+        val dSqi = kotlin.math.max(0f, (bSqi - sqi))
+        val idx = 0.5f * dHr + 0.4f * dHrv + 0.1f * dSqi
+        return idx.coerceIn(0f, 1f)
+    }
+
+    private fun classifyTriage(hr: Float, rmssd: Float, sqi: Float, arrIdx: Float, puls: Float, instability: Float): Int {
+        val safetyRed = (hr >= 130f) || (hr <= 45f) || (arrIdx >= 0.12f && sqi >= 0.3f) || (puls < 0.03f && sqi >= 0.3f)
+        if (safetyRed) return 2
+        if (instability >= 0.8f) return 2
+        if (instability >= 0.5f) return 1
+        return 0
+    }
+
+    private fun buildRationale(triage: Int, hr: Float, rr: FloatArray, rmssd: Float, sqi: Float, arrIdx: Float, instability: Float): String {
+        val rrMean = if (rr.isNotEmpty()) rr.average().toFloat() else 0f
+        val cls = when (triage) { 2 -> "Red"; 1 -> "Amber"; else -> "Green" }
+        return "Triage: $cls\n" +
+                "HR: ${hr.toInt()} bpm\n" +
+                "RMSSD: ${String.format("%.3f", rmssd)} s\n" +
+                "SQI: ${String.format("%.2f", sqi)}\n" +
+                "Irregularity: ${String.format("%.2f", arrIdx)}\n" +
+                "Instability: ${String.format("%.2f", instability)}\n" +
+                (if (rrMean > 0f) "IBI: ${String.format("%.3f", rrMean)} s\n" else "")
     }
 
     // Spectral HR estimation
