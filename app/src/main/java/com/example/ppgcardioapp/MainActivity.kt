@@ -24,6 +24,9 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import org.tensorflow.lite.Interpreter
@@ -70,6 +73,8 @@ class MainActivity : AppCompatActivity() {
     private var flashOn = false
     private var authenticated = false
     private var pendingTorchOn = false
+    private var torchEnabledAtMs: Long = 0L
+    private var fingerConfidence: Float = 0f
 
     // Circular buffer for samples
     private val MAX_BUFFER = 2400 // large buffer (~60-80s at 30-40Hz)
@@ -107,6 +112,13 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val mainLayoutInsets = findViewById<LinearLayout>(R.id.main)
+        ViewCompat.setOnApplyWindowInsetsListener(mainLayoutInsets) { v, insets ->
+            val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(v.paddingLeft, sysBars.top, v.paddingRight, sysBars.bottom)
+            insets
+        }
 
         // find views that should exist in your layout
         previewView = findViewById(R.id.previewView)
@@ -301,6 +313,7 @@ class MainActivity : AppCompatActivity() {
                             method?.invoke(cameraControl, 1)
                         }
                         tvStatus.text = "Flash: ON"
+                        torchEnabledAtMs = System.currentTimeMillis()
                     } catch (_: Exception) {}
                     pendingTorchOn = false
                 }
@@ -363,7 +376,15 @@ class MainActivity : AppCompatActivity() {
         val sqiCombined = computeSQI(combined)
         val redGlow = estimateRedGlow(windowR, windowG)
         val pulsatility = computePulsatilityScore(combined, fs)
-        val fingerDetected = compositeFingerDetection(windowR, windowG, sqiCombined, pulsatility, redGlow)
+        val fingerRaw = compositeFingerDetection(windowR, windowG, sqiCombined, pulsatility, redGlow)
+        val nowMs = System.currentTimeMillis()
+        val inTorchGrace = (torchEnabledAtMs != 0L) && (nowMs - torchEnabledAtMs < 800L)
+        if (fingerRaw) {
+            fingerConfidence = (fingerConfidence + 0.15f).coerceIn(0f, 1f)
+        } else if (!inTorchGrace) {
+            fingerConfidence = (fingerConfidence - 0.25f).coerceIn(0f, 1f)
+        }
+        val fingerDetected = fingerConfidence >= 0.5f
 
         runOnUiThread {
             waveformView.updateData(combined)
@@ -662,6 +683,9 @@ class MainActivity : AppCompatActivity() {
         mlClassList: List<Int>,
         mlScoreList: List<Float>
     ) {
+        cameraControl?.enableTorch(false)
+        flashOn = false
+        stopCapture()
         val builder = AlertDialog.Builder(this)
             .setTitle("30s PPG Report")
             .setMessage(reportText)
@@ -1167,11 +1191,13 @@ class MainActivity : AppCompatActivity() {
         val varOk = varR > 0.02f && varR < 200f
         val sqiOk = sqi > 0.12f
         val pulseOk = pulsatility > 0.02f
+        val redGlowOk = redGlow > 1.15f
+        val meanOk = meanR > 30f
 
         // 5) Flash must be ON
         val flashOk = flashOn
 
-        return varOk && sqiOk && pulseOk && flashOk
+        return varOk && sqiOk && pulseOk && redGlowOk && meanOk && flashOk
     }
 
     // Peak detection (time-domain)
@@ -1267,6 +1293,7 @@ class MainActivity : AppCompatActivity() {
         val idx = 1f - (rmssd / (rmssd + 0.05f)) // scale to 0..1
         return idx.coerceIn(0f, 1f)
     }
+
 
     // Simple conservative rule-based risk (kept)
     private fun ruleBasedRisk(hr: Float, rr: FloatArray, sqi: Float): Float {
