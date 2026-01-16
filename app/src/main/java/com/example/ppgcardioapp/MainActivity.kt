@@ -60,7 +60,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStop: Button
     private lateinit var btnFlash: Button
     private lateinit var btnReset: Button
-    private lateinit var btnOpenPdf: Button
 
     // Extra parameter TextViews (IBI, HRV, Stress)
     private var tvIBI: TextView? = null
@@ -139,13 +138,11 @@ class MainActivity : AppCompatActivity() {
         btnStop = findViewById(R.id.btnStop)
         btnFlash = findViewById(R.id.btnFlash)
         btnReset = findViewById(R.id.btnReset)
-        btnOpenPdf = findViewById(R.id.btnOpenPdf)
 
         btnStart.setOnClickListener { startCapture() }
         btnStop.setOnClickListener { stopCapture() }
         btnFlash.setOnClickListener { toggleFlash() }
         btnReset.setOnClickListener { resetAll() }
-        btnOpenPdf.setOnClickListener { startActivity(Intent(this, PdfViewerActivity::class.java)) }
 
         waveformView.setColor(android.graphics.Color.GREEN)
 
