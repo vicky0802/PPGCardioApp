@@ -404,11 +404,11 @@ class MainActivity : AppCompatActivity() {
         val pulsatility = computePulsatilityScore(combined, fs)
         val fingerRaw = compositeFingerDetection(windowR, windowG, sqiCombined, pulsatility, redGlow)
         val nowMs = System.currentTimeMillis()
-        val inTorchGrace = (torchEnabledAtMs != 0L) && (nowMs - torchEnabledAtMs < 800L)
+        val inTorchGrace = (torchEnabledAtMs != 0L) && (nowMs - torchEnabledAtMs < 1200L)
         if (fingerRaw) {
             fingerConfidence = (fingerConfidence + 0.15f).coerceIn(0f, 1f)
         } else if (!inTorchGrace) {
-            fingerConfidence = (fingerConfidence - 0.25f).coerceIn(0f, 1f)
+            fingerConfidence = (fingerConfidence - 0.12f).coerceIn(0f, 1f)
         }
         val fingerDetected = fingerConfidence >= 0.5f
 
@@ -426,12 +426,6 @@ class MainActivity : AppCompatActivity() {
                 Log.i(TAG, "Reporting started at ${reportStartTimeMs}")
             }
         } else {
-            // if finger lost, reset reporting
-            if (reporting) {
-                // short glitch: don't immediately cancel if it's small — but for simplicity reset
-                resetReporting()
-                Log.i(TAG, "Reporting reset due to finger lost or low SQI")
-            }
         }
 
         // If finger present & flash on & decent SQI, compute HR/HRV/etc.
