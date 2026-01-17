@@ -117,7 +117,7 @@
                 android:id="@+id/waveformView"
                 android:layout_width="match_parent"
                 android:layout_height="220dp"
-                android:background="#000000"/>
+                android:background="#FFFFFF"/>
         </com.google.android.material.card.MaterialCardView>
 
         

@@ -142,9 +142,17 @@ class MainActivity : AppCompatActivity() {
             tflite = null
         }
 
-        initBiometricAuth()
+        val auto = intent.getBooleanExtra("auto_start", false)
+        if (auto) {
+            authenticated = true
+        } else {
+            initBiometricAuth()
+        }
         baselineStore = BaselineStore(this)
         showGuidanceIfFirstRun()
+        if (auto) {
+            startCapture()
+        }
     }
 
     
@@ -479,6 +487,7 @@ class MainActivity : AppCompatActivity() {
                     val triage = classifyTriage(hr, rmssd, sqiCombined, arrIdx, computePulsatilityScore(combined, fs), instability)
                     val label = when (triage) { 2 -> "Red"; 1 -> "Amber"; else -> "Green" }
                     binding.tvScore.text = "Risk: $label (${String.format("%.2f", instability)})"
+                    persistLatestMetrics(hr, rmssd, sqiCombined, instability, triage)
                 }
             }
         } else {
@@ -495,6 +504,18 @@ class MainActivity : AppCompatActivity() {
                 else binding.tvStatus.text = "Poor SQI - adjust finger/pressure"
             }
         }
+    }
+
+    private fun persistLatestMetrics(hr: Float, rmssd: Float, sqi: Float, instability: Float, triage: Int) {
+        val prefs = getSharedPreferences("ppg_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putFloat("latest_hr", hr)
+            .putFloat("latest_rmssd", rmssd)
+            .putFloat("latest_sqi", sqi)
+            .putFloat("latest_instability", instability)
+            .putInt("latest_triage", triage)
+            .putLong("latest_timestamp", System.currentTimeMillis())
+            .apply()
     }
 
     private fun initBiometricAuth() {

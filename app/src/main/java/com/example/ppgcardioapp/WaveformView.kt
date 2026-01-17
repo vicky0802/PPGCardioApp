@@ -67,7 +67,7 @@ class WaveformView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         // clear background
-        canvas.drawColor(Color.BLACK)
+        canvas.drawColor(Color.WHITE)
 
         if (data.isEmpty()) return
 

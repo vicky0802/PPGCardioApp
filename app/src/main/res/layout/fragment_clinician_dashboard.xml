@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:text="Clinician Dashboard"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                app:cardBackgroundColor="@color/cg_card">
+                <LinearLayout
+                    android:orientation="vertical"
+                    android:padding="12dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <TextView android:text="Total Patients"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/cg_text"/>
+                    <TextView android:text="5" android:textStyle="bold"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/cg_text"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                app:cardBackgroundColor="@color/cg_card">
+                <LinearLayout
+                    android:orientation="vertical"
+                    android:padding="12dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <TextView android:text="High Risk"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/cg_text"/>
+                    <TextView android:text="1" android:textStyle="bold"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/cg_text"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                app:cardBackgroundColor="@color/cg_card">
+                <LinearLayout
+                    android:orientation="vertical"
+                    android:padding="12dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content">
+                    <TextView android:text="Today’s Alerts"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/cg_text"/>
+                    <TextView android:text="2" android:textStyle="bold"
+                        android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:textColor="@color/cg_text"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAll"
+                android:text="ALL"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnRed"
+                android:text="RED"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAmber"
+                android:text="AMBER"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnGreen"
+                android:text="GREEN"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"/>
+        </LinearLayout>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
+            <LinearLayout
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <TextView android:text="Sarah Johnson" android:textStyle="bold"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/cg_text"/>
+                <TextView android:text="RED • 45y F • ID: p001"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/cg_text"/>
+                <TextView android:text="Instability: 78/100"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/cg_text"/>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
+            <LinearLayout
+                android:orientation="vertical"
+                android:padding="12dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+                <TextView android:text="Michael Chen" android:textStyle="bold"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/cg_text"/>
+                <TextView android:text="AMBER • 52y M • ID: p002"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/cg_text"/>
+                <TextView android:text="Instability: 52/100"
+                    android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/cg_text"/>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+</ScrollView>

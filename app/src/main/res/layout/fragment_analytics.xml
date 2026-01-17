@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true">
+
+    <LinearLayout
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:text="Analytics &amp; Export"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
+            <TextView android:text="Date Range: Last 14 Days"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnExport"
+                android:text="Export CSV"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"/>
+        </LinearLayout>
+
+        <TextView android:text="Heart Rate" android:layout_marginTop="12dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <com.example.ppgcardioapp.WaveformView
+            android:id="@+id/chartHr14"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:background="#FFFFFF"/>
+
+        <TextView android:text="HRV Proxy" android:layout_marginTop="12dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <com.example.ppgcardioapp.WaveformView
+            android:id="@+id/chartHrv14"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:background="#FFFFFF"/>
+
+        <TextView android:text="Respiratory Rate" android:layout_marginTop="12dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <com.example.ppgcardioapp.WaveformView
+            android:id="@+id/chartResp14"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:background="#FFFFFF"/>
+
+        <TextView android:text="Signal Quality" android:layout_marginTop="12dp"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <com.example.ppgcardioapp.WaveformView
+            android:id="@+id/chartSqi14"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:background="#FFFFFF"/>
+
+        <TextView
+            android:text="Clinical Notes"
+            android:textStyle="bold"
+            android:layout_marginTop="12dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+        <EditText
+            android:id="@+id/etNote"
+            android:hint="Add a clinical note..."
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"/>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAddNote"
+            android:text="Add Note"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"/>
+
+    </LinearLayout>
+
+</ScrollView>
