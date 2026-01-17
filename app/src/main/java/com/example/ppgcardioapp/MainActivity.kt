@@ -365,12 +365,12 @@ class MainActivity : AppCompatActivity() {
         val nowMs = System.currentTimeMillis()
         val inTorchGrace = (torchEnabledAtMs != 0L) && (nowMs - torchEnabledAtMs < 1200L)
         if (fingerRaw) {
-            fingerConfidence = (fingerConfidence + 0.15f).coerceIn(0f, 1f)
+            fingerConfidence = (fingerConfidence + 0.18f).coerceIn(0f, 1f)
             lastFingerTrueMs = nowMs
         } else if (!inTorchGrace) {
-            fingerConfidence = (fingerConfidence - 0.12f).coerceIn(0f, 1f)
+            fingerConfidence = (fingerConfidence - 0.10f).coerceIn(0f, 1f)
         }
-        val fingerDetected = fingerConfidence >= 0.5f
+        val fingerDetected = fingerConfidence >= 0.45f
 
         // Keep torch state as-is during measurement; device may still disable it for thermal reasons.
 
@@ -1165,16 +1165,18 @@ class MainActivity : AppCompatActivity() {
 
         val meanR = winR.average().toFloat()
         val varR = winR.map { it - meanR }.map { it * it }.average().toFloat()
-        val varOk = varR > 0.01f && varR < 250f
-        val sqiOk = sqi > 0.10f
-        val pulseOk = pulsatility > 0.015f
-        val redGlowOk = redGlow > 1.05f
-        val meanOk = meanR > 20f
+        val meanG = winG.average().toFloat()
+        val varG = winG.map { it - meanG }.map { it * it }.average().toFloat()
 
-        // 5) Flash must be ON
+        val varOk = (varR > 0.008f && varR < 400f) || (varG > 0.008f && varG < 400f)
+        val sqiOk = sqi > 0.08f
+        val pulseOk = pulsatility > 0.012f
+        val redGlowOk = redGlow > 1.02f
+        val meanOk = (meanR > 15f) || (meanG > 15f)
+
         val flashOk = flashOn
 
-        return varOk && sqiOk && pulseOk && redGlowOk && meanOk && flashOk
+        return varOk && sqiOk && pulseOk && (redGlowOk || (varG > 0.008f && meanG > 15f)) && meanOk && flashOk
     }
 
     // Peak detection (time-domain)
