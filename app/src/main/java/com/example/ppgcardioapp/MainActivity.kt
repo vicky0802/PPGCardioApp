@@ -21,6 +21,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import com.example.ppgcardioapp.databinding.ActivityMainBinding
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -49,22 +50,10 @@ class MainActivity : AppCompatActivity() {
     private val TAG = "MainActivity"
 
     // UI
-    private lateinit var previewView: PreviewView
-    private lateinit var waveformView: WaveformView
-    private lateinit var tvHR: TextView
-    private lateinit var tvScore: TextView
-    private lateinit var tvSQI: TextView
-    private lateinit var tvStatus: TextView
-    private lateinit var tvTimer: TextView
-    private lateinit var btnStart: Button
-    private lateinit var btnStop: Button
-    private lateinit var btnFlash: Button
-    private lateinit var btnReset: Button
+    private lateinit var binding: ActivityMainBinding
+    
 
-    // Extra parameter TextViews (IBI, HRV, Stress)
-    private var tvIBI: TextView? = null
-    private var tvHRV: TextView? = null
-    private var tvStress: TextView? = null
+    
 
     // CameraX
     private var cameraControl: CameraControl? = null
@@ -78,6 +67,7 @@ class MainActivity : AppCompatActivity() {
     private var authenticated = false
     private var pendingTorchOn = false
     private var torchEnabledAtMs: Long = 0L
+    private var lastFingerTrueMs: Long = 0L
     private var fingerConfidence: Float = 0f
     private lateinit var baselineStore: BaselineStore
 
@@ -98,7 +88,7 @@ class MainActivity : AppCompatActivity() {
 
     // Permission launcher
     private val requestPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) runOnUiThread { tvStatus.text = "Camera permission required" }
+        if (!granted) runOnUiThread { binding.tvStatus.text = "Camera permission required" }
     }
 
     // ---------- Reporting / accumulation ----------
@@ -116,44 +106,30 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        val mainLayoutInsets = findViewById<LinearLayout>(R.id.main)
+        val mainLayoutInsets = binding.main
         ViewCompat.setOnApplyWindowInsetsListener(mainLayoutInsets) { v, insets ->
             val sysBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(v.paddingLeft, sysBars.top, v.paddingRight, sysBars.bottom)
             insets
         }
 
-        // find views that should exist in your layout
-        previewView = findViewById(R.id.previewView)
-        waveformView = findViewById(R.id.waveformView)
-        tvHR = findViewById(R.id.tvHR)
-        tvScore = findViewById(R.id.tvScore)
-        tvSQI = findViewById(R.id.tvSQI)
-        tvStatus = findViewById(R.id.tvStatus)
-        tvTimer = findViewById(R.id.tvTimer)
+        binding.btnStart.setOnClickListener { startCapture() }
+        binding.btnStop.setOnClickListener { stopCapture() }
+        binding.btnFlash.setOnClickListener { toggleFlash() }
+        binding.btnReset.setOnClickListener { resetAll() }
 
-        btnStart = findViewById(R.id.btnStart)
-        btnStop = findViewById(R.id.btnStop)
-        btnFlash = findViewById(R.id.btnFlash)
-        btnReset = findViewById(R.id.btnReset)
+        binding.waveformView.setColor(android.graphics.Color.GREEN)
 
-        btnStart.setOnClickListener { startCapture() }
-        btnStop.setOnClickListener { stopCapture() }
-        btnFlash.setOnClickListener { toggleFlash() }
-        btnReset.setOnClickListener { resetAll() }
-
-        waveformView.setColor(android.graphics.Color.GREEN)
-
-        // attach optional parameter TextViews (IBI, HRV, Stress); create if missing
-        safeAttachExtraParameterViews()
+        
 
         // Permission check
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             requestPermission.launch(Manifest.permission.CAMERA)
         } else {
-            tvStatus.text = "Ready"
+            binding.tvStatus.text = "Ready"
         }
 
         // Try loading TFLite model if present in assets; if not present, app still works (uses rule-based)
@@ -171,51 +147,7 @@ class MainActivity : AppCompatActivity() {
         showGuidanceIfFirstRun()
     }
 
-    // If layout lacks extra parameter TextViews, create them and attach below waveform
-    private fun safeAttachExtraParameterViews() {
-        fun createTv(label: String): TextView {
-            val tv = TextView(this)
-            tv.layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                (this as LinearLayout.LayoutParams).setMargins(8, 6, 8, 6)
-            }
-            tv.textSize = 14f
-            tv.text = "$label: --"
-            return tv
-        }
-
-        // Attempt to find pre-existing ids; if missing create and attach
-        tvIBI = runCatching { findViewById<TextView>(R.id.tvIBI) }.getOrNull()
-        tvHRV = runCatching { findViewById<TextView>(R.id.tvHRV) }.getOrNull()
-        tvStress = runCatching { findViewById<TextView>(R.id.tvStress) }.getOrNull()
-
-        // If any missing, create a horizontal layout and append
-        if (listOf(tvIBI, tvHRV, tvStress).any { it == null }) {
-            val mainLayout = findViewById<LinearLayout>(R.id.main) ?: return
-            val container = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                gravity = Gravity.CENTER_HORIZONTAL
-            }
-
-            // IBI + HRV + Stress row
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-            }
-            if (tvIBI == null) tvIBI = createTv("IBI (s)")
-            if (tvHRV == null) tvHRV = createTv("HRV (RMSSD)")
-            if (tvStress == null) tvStress = createTv("StressIdx")
-            row.addView(tvIBI)
-            row.addView(tvHRV)
-            row.addView(tvStress)
-
-            container.addView(row)
-            mainLayout.addView(container)
-        }
-    }
+    
 
     private fun showGuidanceIfFirstRun() {
         val prefs = getSharedPreferences("ppg_prefs", Context.MODE_PRIVATE)
@@ -238,12 +170,12 @@ class MainActivity : AppCompatActivity() {
     private fun startCapture() {
         if (running) return
         if (!authenticated) {
-            tvStatus.text = "Authenticate to start"
+            binding.tvStatus.text = "Authenticate to start"
             return
         }
         running = true
-        btnStart.isEnabled = false
-        tvStatus.text = "Starting camera..."
+        binding.btnStart.isEnabled = false
+        binding.tvStatus.text = "Starting camera..."
         pendingTorchOn = true
         startCamera()
     }
@@ -251,8 +183,8 @@ class MainActivity : AppCompatActivity() {
     private fun stopCapture() {
         if (!running) return
         running = false
-        btnStart.isEnabled = true
-        tvStatus.text = "Stopped"
+        binding.btnStart.isEnabled = true
+        binding.tvStatus.text = "Stopped"
         cameraProvider?.unbindAll()
         // reset accumulation
         resetReporting()
@@ -264,14 +196,14 @@ class MainActivity : AppCompatActivity() {
         for (i in redBuf.indices) redBuf[i] = 0f
         for (i in greenBuf.indices) greenBuf[i] = 0f
         for (i in timeBuf.indices) timeBuf[i] = 0L
-        waveformView.updateData(FloatArray(0))
-        tvHR.text = "HR: --"
-        tvScore.text = "Risk: --"
-        tvSQI.text = "SQI: --"
-        tvStatus.text = "Status: Reset"
-        tvIBI?.text = "IBI (s): --"
-        tvHRV?.text = "HRV (RMSSD): --"
-        tvStress?.text = "StressIdx: --"
+        binding.waveformView.updateData(FloatArray(0))
+        binding.tvHR.text = "HR: --"
+        binding.tvScore.text = "Risk: --"
+        binding.tvSQI.text = "SQI: --"
+        binding.tvStatus.text = "Status: Reset"
+        binding.tvIBI.text = "IBI (s): --"
+        binding.tvHRV.text = "HRV (RMSSD): --"
+        binding.tvStress.text = "StressIdx: --"
         resetReporting()
     }
 
@@ -298,14 +230,14 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.w(TAG, "Torch strength not supported: ${e.localizedMessage}")
         }
-        tvStatus.text = if (flashOn) "Flash: ON" else "Flash: OFF"
+        binding.tvStatus.text = if (flashOn) "Flash: ON" else "Flash: OFF"
     }
 
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
         cameraProviderFuture.addListener({
             cameraProvider = cameraProviderFuture.get()
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+            val preview = Preview.Builder().build().also { it.setSurfaceProvider(binding.previewView.surfaceProvider) }
 
             imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -329,7 +261,7 @@ class MainActivity : AppCompatActivity() {
                 cameraProvider?.unbindAll()
                 val camera = cameraProvider?.bindToLifecycle(this, selector, preview, imageAnalysis)
                 cameraControl = camera?.cameraControl
-                tvStatus.text = "Camera running"
+                binding.tvStatus.text = "Camera running"
                 if (pendingTorchOn) {
                     try {
                         flashOn = true
@@ -338,14 +270,14 @@ class MainActivity : AppCompatActivity() {
                             val method = cameraControl?.javaClass?.methods?.firstOrNull { it.name == "setTorchStrengthLevel" }
                             method?.invoke(cameraControl, 1)
                         }
-                        tvStatus.text = "Flash: ON"
+                        binding.tvStatus.text = "Flash: ON"
                         torchEnabledAtMs = System.currentTimeMillis()
                     } catch (_: Exception) {}
                     pendingTorchOn = false
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Bind failed", e)
-                tvStatus.text = "Camera bind failed"
+                binding.tvStatus.text = "Camera bind failed"
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -362,8 +294,8 @@ class MainActivity : AppCompatActivity() {
         val minSamples = 6 * 20 // ~6s @ >=20Hz
         if (totalSamples < minSamples) {
             runOnUiThread {
-                tvSQI.text = "SQI: collecting..."
-                tvStatus.text = "Place finger & wait"
+                binding.tvSQI.text = "SQI: collecting..."
+                binding.tvStatus.text = "Place finger & wait"
             }
             return
         }
@@ -407,14 +339,29 @@ class MainActivity : AppCompatActivity() {
         val inTorchGrace = (torchEnabledAtMs != 0L) && (nowMs - torchEnabledAtMs < 1200L)
         if (fingerRaw) {
             fingerConfidence = (fingerConfidence + 0.15f).coerceIn(0f, 1f)
+            lastFingerTrueMs = nowMs
         } else if (!inTorchGrace) {
             fingerConfidence = (fingerConfidence - 0.12f).coerceIn(0f, 1f)
         }
         val fingerDetected = fingerConfidence >= 0.5f
 
+        if (!fingerDetected && flashOn && nowMs - lastFingerTrueMs > 2000L) {
+            cameraControl?.enableTorch(false)
+            flashOn = false
+        }
+        if (fingerDetected && !flashOn) {
+            cameraControl?.enableTorch(true)
+            flashOn = true
+            torchEnabledAtMs = nowMs
+        }
+
+        var meanCombined = 0f
+        for (v in combined) meanCombined += v
+        meanCombined /= combined.size
         runOnUiThread {
-            waveformView.updateData(combined)
-            tvSQI.text = "SQI: ${"%.2f".format(sqiCombined)} ${if (fingerDetected) "(finger)" else "(no finger)"}"
+            binding.waveformView.updateData(combined)
+            binding.waveformView.setBaseline(meanCombined)
+            binding.tvSQI.text = "SQI: ${"%.2f".format(sqiCombined)} ${if (fingerDetected) "(finger)" else "(no finger)"}"
         }
 
         // Start reporting accumulation when fingerDetected true, SQI ok, and flash on
@@ -501,33 +448,32 @@ class MainActivity : AppCompatActivity() {
 
                 // update UI metrics live
                 runOnUiThread {
-                    tvHR.text = if (hr > 0f) "HR: ${hr.toInt()}" else "HR: --"
-                    tvIBI?.text = "IBI (s): ${if (ibi > 0f) String.format("%.3f", ibi) else "--"}"
-                    tvHRV?.text = "HRV (RMSSD): ${if (rmssd > 0f) String.format("%.3f", rmssd) else "--"}"
-                    tvStress?.text = "StressIdx: ${String.format("%.2f", stressIdx)}"
+                    binding.tvHR.text = if (hr > 0f) "HR: ${hr.toInt()}" else "HR: --"
+                    binding.tvIBI.text = "IBI (s): ${if (ibi > 0f) String.format("%.3f", ibi) else "--"}"
+                    binding.tvHRV.text = "HRV (RMSSD): ${if (rmssd > 0f) String.format("%.3f", rmssd) else "--"}"
+                    binding.tvStress.text = "StressIdx: ${String.format("%.2f", stressIdx)}"
+                    binding.waveformView.setMarkers(peaks.toIntArray())
 
                     val arrIdx = computeIrregularityIndex(rr)
                     val baseline = baselineStore.load()
                     val instability = computeInstabilityIndex(hr, rmssd, sqiCombined, baseline)
                     val triage = classifyTriage(hr, rmssd, sqiCombined, arrIdx, computePulsatilityScore(combined, fs), instability)
                     val label = when (triage) { 2 -> "Red"; 1 -> "Amber"; else -> "Green" }
-                    tvScore.text = "Risk: $label (${String.format("%.2f", instability)})"
-                    val elapsedSec = if (reporting) ((System.currentTimeMillis() - reportStartTimeMs)/1000L).toInt() else 0
-                    tvTimer.text = "Time: ${elapsedSec}/${REPORT_SECONDS}s"
+                    binding.tvScore.text = "Risk: $label (${String.format("%.2f", instability)})"
                 }
             }
         } else {
             // No reliable finger signal or flash off -> show placeholders
             runOnUiThread {
-                tvHR.text = "HR: --"
-                tvScore.text = "Risk: --"
-                tvIBI?.text = "IBI (s): --"
-                tvHRV?.text = "HRV (RMSSD): --"
-                tvStress?.text = "StressIdx: --"
+                binding.tvHR.text = "HR: --"
+                binding.tvScore.text = "Risk: --"
+                binding.tvIBI.text = "IBI (s): --"
+                binding.tvHRV.text = "HRV (RMSSD): --"
+                binding.tvStress.text = "StressIdx: --"
 
-                if (!flashOn) tvStatus.text = "Flash must be ON"
-                else if (!fingerDetected) tvStatus.text = "No reliable finger signal"
-                else tvStatus.text = "Poor SQI - adjust finger/pressure"
+                if (!flashOn) binding.tvStatus.text = "Flash must be ON"
+                else if (!fingerDetected) binding.tvStatus.text = "No reliable finger signal"
+                else binding.tvStatus.text = "Poor SQI - adjust finger/pressure"
             }
         }
     }
@@ -542,20 +488,20 @@ class MainActivity : AppCompatActivity() {
         when (can) {
             BiometricManager.BIOMETRIC_SUCCESS -> {}
             else -> {
-                tvStatus.text = "Biometrics unavailable"
+                binding.tvStatus.text = "Biometrics unavailable"
                 return
             }
         }
-        btnStart.isEnabled = false
-        btnFlash.isEnabled = false
-        btnReset.isEnabled = false
+        binding.btnStart.isEnabled = false
+        binding.btnFlash.isEnabled = false
+        binding.btnReset.isEnabled = false
         val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 authenticated = true
-                btnStart.isEnabled = true
-                btnFlash.isEnabled = true
-                btnReset.isEnabled = true
-                tvStatus.text = "Authenticated"
+                binding.btnStart.isEnabled = true
+                binding.btnFlash.isEnabled = true
+                binding.btnReset.isEnabled = true
+                binding.tvStatus.text = "Authenticated"
             }
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 AlertDialog.Builder(this@MainActivity)
@@ -567,7 +513,7 @@ class MainActivity : AppCompatActivity() {
                     .show()
             }
             override fun onAuthenticationFailed() {
-                tvStatus.text = "Authentication failed"
+                binding.tvStatus.text = "Authentication failed"
             }
         })
         val info = BiometricPrompt.PromptInfo.Builder()
@@ -1200,11 +1146,11 @@ class MainActivity : AppCompatActivity() {
 
         val meanR = winR.average().toFloat()
         val varR = winR.map { it - meanR }.map { it * it }.average().toFloat()
-        val varOk = varR > 0.02f && varR < 200f
-        val sqiOk = sqi > 0.12f
-        val pulseOk = pulsatility > 0.02f
-        val redGlowOk = redGlow > 1.15f
-        val meanOk = meanR > 30f
+        val varOk = varR > 0.01f && varR < 250f
+        val sqiOk = sqi > 0.10f
+        val pulseOk = pulsatility > 0.015f
+        val redGlowOk = redGlow > 1.05f
+        val meanOk = meanR > 20f
 
         // 5) Flash must be ON
         val flashOk = flashOn

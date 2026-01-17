@@ -18,6 +18,18 @@ class WaveformView @JvmOverloads constructor(
         isAntiAlias = true
     }
 
+    private val baselinePaint = Paint().apply {
+        color = Color.CYAN
+        strokeWidth = 2f
+        isAntiAlias = true
+    }
+
+    private val markerPaint = Paint().apply {
+        color = Color.RED
+        strokeWidth = 6f
+        isAntiAlias = true
+    }
+
     fun setColor(color: Int) {
         paint.color = color
         postInvalidateOnAnimation()
@@ -25,6 +37,8 @@ class WaveformView @JvmOverloads constructor(
 
     // internal buffer for waveform samples
     private var data: FloatArray = FloatArray(0)
+    private var markers: IntArray = IntArray(0)
+    private var baselineValue: Float? = null
 
     /**
      * Update the waveform with a new sample array and request redraw.
@@ -32,6 +46,21 @@ class WaveformView @JvmOverloads constructor(
      */
     fun updateData(values: FloatArray) {
         data = values.copyOf()
+        postInvalidateOnAnimation()
+    }
+
+    fun setMarkers(indices: IntArray) {
+        markers = indices.copyOf()
+        postInvalidateOnAnimation()
+    }
+
+    fun setBaseline(value: Float) {
+        baselineValue = value
+        postInvalidateOnAnimation()
+    }
+
+    fun clearBaseline() {
+        baselineValue = null
         postInvalidateOnAnimation()
     }
 
@@ -57,6 +86,12 @@ class WaveformView @JvmOverloads constructor(
 
         val range = if (maxv - minv < 1e-6f) 1e-6f else (maxv - minv)
 
+        baselineValue?.let {
+            val normalized = ((it - minv) / range).coerceIn(0f, 1f)
+            val yb = h - (normalized * h)
+            canvas.drawLine(0f, yb, w, yb, baselinePaint)
+        }
+
         var prevX = 0f
         var prevY = h / 2f
 
@@ -67,6 +102,17 @@ class WaveformView @JvmOverloads constructor(
             canvas.drawLine(prevX, prevY, x, y, paint)
             prevX = x
             prevY = y
+        }
+
+        if (markers.isNotEmpty()) {
+            for (idx in markers) {
+                if (idx in 0 until data.size) {
+                    val x = idx * step
+                    val normalized = (data[idx] - minv) / range
+                    val y = h - (normalized * h)
+                    canvas.drawCircle(x, y, 6f, markerPaint)
+                }
+            }
         }
     }
 }
