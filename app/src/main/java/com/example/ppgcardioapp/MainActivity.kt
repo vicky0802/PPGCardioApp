@@ -177,6 +177,15 @@ class MainActivity : AppCompatActivity() {
         binding.btnStart.isEnabled = false
         binding.tvStatus.text = "Starting camera..."
         pendingTorchOn = true
+        try {
+            cameraControl?.enableTorch(true)
+            flashOn = true
+            if (Build.VERSION.SDK_INT >= 33) {
+                val method = cameraControl?.javaClass?.methods?.firstOrNull { it.name == "setTorchStrengthLevel" }
+                method?.invoke(cameraControl, 1)
+            }
+            torchEnabledAtMs = System.currentTimeMillis()
+        } catch (_: Exception) {}
         startCamera()
     }
 
@@ -275,6 +284,24 @@ class MainActivity : AppCompatActivity() {
                     } catch (_: Exception) {}
                     pendingTorchOn = false
                 }
+                camera?.cameraInfo?.torchState?.observe(this) { state ->
+                    when (state) {
+                        TorchState.ON -> {
+                            flashOn = true
+                            binding.tvStatus.text = "Flash: ON"
+                        }
+                        TorchState.OFF -> {
+                            flashOn = false
+                            if (running) {
+                                binding.tvStatus.text = "Flash OFF (device or thermal)"
+                                binding.root.postDelayed({
+                                    try { cameraControl?.enableTorch(true) } catch (_: Exception) {}
+                                }, 5000)
+                            }
+                        }
+                        else -> {}
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Bind failed", e)
                 binding.tvStatus.text = "Camera bind failed"
@@ -345,15 +372,7 @@ class MainActivity : AppCompatActivity() {
         }
         val fingerDetected = fingerConfidence >= 0.5f
 
-        if (!fingerDetected && flashOn && nowMs - lastFingerTrueMs > 2000L) {
-            cameraControl?.enableTorch(false)
-            flashOn = false
-        }
-        if (fingerDetected && !flashOn) {
-            cameraControl?.enableTorch(true)
-            flashOn = true
-            torchEnabledAtMs = nowMs
-        }
+        // Keep torch state as-is during measurement; device may still disable it for thermal reasons.
 
         var meanCombined = 0f
         for (v in combined) meanCombined += v
